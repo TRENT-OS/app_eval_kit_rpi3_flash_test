@@ -126,7 +126,7 @@ test_OS_BlockAccess(void)
 
     //test/detect memory size
     Debug_LOG_INFO("Detecting available memory size...");
-    Debug_LOG_INFO("test addr 0x0");
+    //Debug_LOG_INFO("test addr 0x0");
     test_flash_block(0, buf, buf_ref_empty, buf_ref_pattern_block_0);
     off_t addr = 0;
 
@@ -135,7 +135,11 @@ test_OS_BlockAccess(void)
     for (unsigned int i = 0; i <= log2(FLASH_SZ/BLOCK_SZ); i++)
     {
         addr = BLOCK_SZ << i;
-        Debug_LOG_INFO("test 2^n addr: 0x0%jx", addr);
+
+        Debug_LOG_INFO(
+            "Testing memory size: %lld Bytes (%lld MiB).", 
+            addr,addr/1024/1024);
+
         ret = test_flash_block(
                 addr,
                 buf,
@@ -162,20 +166,24 @@ test_OS_BlockAccess(void)
 
     Debug_LOG_INFO(
         "Detected memory size: %lld Bytes (%lld MiB) => %s\n",
-        addr,addr/1024/1024,addr==FLASH_SZ ? "Flash size OK" : "Flash size wrong");
+        addr,addr/1024/1024,addr==FLASH_SZ ? "FLASH SIZE OK!" : "FLASH SIZE WRONG!");
 
     if(addr != FLASH_SZ) return false; 
 
     //test every single memory cell
-    Debug_LOG_INFO("Testing every single block...");
+    Debug_LOG_INFO("Testing every memory block...");
     const size_t start_addr = 0x0;
     const size_t end_addr = FLASH_SZ;
+    const size_t print_delta = 50;
     for(addr = start_addr; addr < end_addr; addr += BLOCK_SZ)
     {
         //pattern test
-        Debug_LOG_INFO(
-            "test block %lld (0x0%jx)", 
-            addr/BLOCK_SZ, addr);
+        if ((addr/BLOCK_SZ) % print_delta == 0)
+        {
+            Debug_LOG_INFO(
+                "Testing block %lld of %d", 
+                addr/BLOCK_SZ, FLASH_SZ/BLOCK_SZ);
+        }
 
         ret = test_flash_block(addr, buf, buf_ref_empty, buf_ref_pattern);
         if (OS_SUCCESS != ret)
@@ -185,16 +193,9 @@ test_OS_BlockAccess(void)
                 addr/BLOCK_SZ,addr, ret);
             break;
         }
-        Debug_LOG_INFO(
-            "pattern correct for block %lld (0x0%jx)", 
-            addr/BLOCK_SZ, addr);
-
+        
         //block erase 
         off_t bytes_erased = 0;
-        Debug_LOG_INFO(
-            "erase block %lld (0x0%jx)",
-            addr/BLOCK_SZ, addr);
-        
         ret = storage_rpc_erase(addr, BLOCK_SZ, &bytes_erased);
         if ((ret != OS_SUCCESS) || (bytes_erased != BLOCK_SZ))
         {
@@ -203,10 +204,6 @@ test_OS_BlockAccess(void)
                 addr/BLOCK_SZ,addr,ret);
             return false;
         }
-        
-        Debug_LOG_INFO(
-            "block %lld (0x0%jx) OK\n",
-            addr/BLOCK_SZ,addr);
     }
     Debug_LOG_INFO(
         "Functioning flash up to block %lld (0x0%jx) => %s\n",
@@ -222,7 +219,7 @@ int run()
     Debug_LOG_INFO("Starting NOR Flash test.");
     Debug_LOG_INFO("Expected flash size: %d Bytes (%d MiB)",FLASH_SZ,FLASH_SZ/1024/1024);
     bool ret = test_OS_BlockAccess();
-    Debug_LOG_INFO("%s",ret ? "Flash OK." : "Flash defect.");
+    Debug_LOG_INFO("%s\n",ret ? "FLASH OK!" : "FLASH DEFECT!");
     Debug_LOG_INFO("All tests done!");
     return 0;
 }

@@ -15,6 +15,8 @@ target_include_directories(${PROJECT_NAME} INTERFACE ${CMAKE_CURRENT_LIST_DIR})
 #-------------------------------------------------------------------------------
 project(test_filesystem C)
 
+set(LibUtilsDefaultZfLogLevel 5 CACHE STRING "" FORCE)
+
 DeclareCAmkESComponent(
     test_OS_Storage
     SOURCES
