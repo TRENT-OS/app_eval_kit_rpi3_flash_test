@@ -1,0 +1,46 @@
+/*
+ *  CAmkES configuration file for FileSystem tests
+ *
+ *  Copyright (C) 2020, Hensoldt Cyber GmbH
+ */
+
+import <std_connector.camkes>;
+
+import "components/Tests/test_OS_Storage.camkes";
+
+#include "TimeServer/camkes/TimeServer.camkes"
+DECLARE_COMPONENT_TimeServer(TimeServer)
+
+#include "RPI_SPI_Flash/RPI_SPI_Flash.camkes"
+DECLARE_COMPONENT_RPI_SPI_FLASH_DRV(RPI_SPI_Flash)
+
+#include "StorageServer/camkes/StorageServer.camkes"
+DECLARE_COMPONENT_StorageServer(StorageServer)
+
+assembly {
+    composition {
+        component   test_OS_Storage                 unitTests;
+
+        DECLARE_AND_CONNECT_INSTANCE_RPI_SPI_FLASH(
+            RPI_SPI_Flash, flash)
+
+        DECLARE_AND_CONNECT_INSTANCE_TimeServer(
+            TimeServer,
+            timeServer,
+            flash.timeServer_rpc,flash.timeServer_notify)
+
+        DECLARE_AND_CONNECT_INSTANCE_StorageServer(
+            StorageServer, storageServer,
+            flash.storage_rpc, flash.storage_port,
+            unitTests.storage_rpc, unitTests.storage_dp)
+    }
+
+    configuration {
+        CONFIGURE_INSTANCE_RPI_SPI_FLASH(flash)
+
+        #define FLASH_SZ 8*1024*1024
+        CONFIGURE_INSTANCE_StorageServer(
+            storageServer,
+            0, FLASH_SZ)
+    }
+}
