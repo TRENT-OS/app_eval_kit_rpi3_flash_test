@@ -1,0 +1,71 @@
+/*
+ *  CAmkES configuration file for FileSystem tests
+ *
+ *  Copyright (C) 2020, Hensoldt Cyber GmbH
+ */
+#include "system_config.h"
+
+import <std_connector.camkes>;
+
+import "components/Tests/test_OS_Storage.camkes";
+
+#include "TimeServer/camkes/TimeServer.camkes"
+TimeServer_COMPONENT_DEFINE(TimeServer)
+
+#include "RPi_SPI_Flash/RPi_SPI_Flash.camkes"
+RPi_SPI_Flash_HW_COMPONENT_DEFINE(RPi_SPI_Flash_HW)
+RPi_SPI_Flash_COMPONENT_DEFINE(RPi_SPI_Flash)
+
+#include "StorageServer/camkes/StorageServer.camkes"
+StorageServer_COMPONENT_DEFINE(StorageServer)
+
+assembly {
+    composition {
+        component RPi_SPI_Flash_HW flash_hw;
+        component RPi_SPI_Flash flash;
+        RPi_SPI_Flash_INSTANCE_CONNECT(
+            flash,
+            flash_hw
+        )
+
+        //----------------------------------------------------------------------
+        // TimeServer
+        //----------------------------------------------------------------------
+        component TimeServer timeServer;
+        TimeServer_INSTANCE_CONNECT_CLIENTS(
+            timeServer,
+            flash.timeServer_rpc,flash.timeServer_notify
+        )
+
+        component   test_OS_Storage tester_flash;
+
+        component   StorageServer   storageServerFlash;
+
+        StorageServer_INSTANCE_CONNECT(
+            storageServerFlash,
+            flash.storage_rpc, flash.storage_port
+        )
+
+        StorageServer_INSTANCE_CONNECT_CLIENTS(
+            storageServerFlash,
+            tester_flash.storage_rpc, tester_flash.storage_port
+        )
+    }
+
+    configuration {
+        RPi_SPI_Flash_HW_INSTANCE_CONFIGURE_SELF(flash_hw)
+
+        StorageServer_INSTANCE_CONFIGURE_CLIENTS(
+            storageServerFlash,
+            0, FLASH_SZ
+        )
+
+        StorageServer_CLIENT_ASSIGN_BADGES(
+            tester_flash.storage_rpc
+        )
+
+        TimeServer_CLIENT_ASSIGN_BADGES(
+            flash.timeServer_rpc
+        )
+    }
+}

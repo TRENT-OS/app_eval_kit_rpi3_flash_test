@@ -1,0 +1,11 @@
+/**
+ * Copyright (C) 2019, Hensoldt Cyber GmbH
+ */
+
+import <if_OS_Storage.camkes>;
+
+component test_OS_Storage {
+    control;
+    uses        if_OS_Storage   storage_rpc;
+    dataport    Buf             storage_port;
+}
