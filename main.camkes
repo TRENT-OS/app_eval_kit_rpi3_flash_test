@@ -27,7 +27,8 @@ assembly {
         DECLARE_AND_CONNECT_INSTANCE_TimeServer(
             TimeServer,
             timeServer,
-            flash.timeServer_rpc,flash.timeServer_notify)
+            flash.timeServer_rpc,flash.timeServer_notify,
+            unitTests.timeServer_rpc,unitTests.timeServer_notify)
 
         DECLARE_AND_CONNECT_INSTANCE_StorageServer(
             StorageServer, storageServer,

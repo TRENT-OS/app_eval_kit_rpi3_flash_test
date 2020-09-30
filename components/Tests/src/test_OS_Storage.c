@@ -8,12 +8,35 @@
 #include <math.h>
 #include <string.h>
 #include <stdbool.h>
+#include "TimeServer.h"
 
 #define FLASH_SZ    8*1024*1024
 #define BLOCK_SZ    4096
-#define PAGE_SZ      256
+#define PAGE_SZ     256
 
 static OS_Dataport_t port_storage  = OS_DATAPORT_ASSIGN(storage_dp);
+
+static const if_OS_Timer_t timer =
+    IF_OS_TIMER_ASSIGN(
+        timeServer_rpc,
+        timeServer_notify);
+
+static uint64_t
+get_time_nsec(
+    void)
+{
+    OS_Error_t err;
+    uint64_t nsec;
+
+    if ((err = TimeServer_getTime(&timer, TimeServer_PRECISION_NSEC,
+                                  &nsec)) != OS_SUCCESS)
+    {
+        Debug_LOG_ERROR("TimeServer_getTime() failed with %d", err);
+        nsec = 0;
+    }
+
+    return nsec;
+}
 
 //------------------------------------------------------------------------------
 static OS_Error_t
@@ -24,9 +47,9 @@ read_validate(
     uint8_t *buf,
     const uint8_t *buf_ref)
 {
-    // Debug_LOG_INFO("read_validate addr=0x%x, len=0x%0x", addr, sz);
-
     size_t bytes_read = 0;
+    uint64_t timestamp, newTimestamp, delta = 0;
+    timestamp = get_time_nsec();
     OS_Error_t ret = storage_rpc_read(addr, sz, &bytes_read);
     if ((OS_SUCCESS != ret) || (bytes_read != sz))
     {
@@ -35,8 +58,21 @@ read_validate(
             addr, sz, bytes_read, ret);
         return OS_ERROR_GENERIC;
     }
+    newTimestamp = get_time_nsec();
+    delta = newTimestamp - timestamp;
+    Debug_LOG_INFO(
+        "Storage_rpc_read(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
+        delta / NS_IN_S,
+        delta % NS_IN_S);
 
+    timestamp = get_time_nsec();
     const void* data = OS_Dataport_getBuf(port_storage);
+    newTimestamp = get_time_nsec();
+    delta = newTimestamp - timestamp;
+    Debug_LOG_INFO(
+        "OS_Dataport_getBuf(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
+        delta / NS_IN_S,
+        delta % NS_IN_S);
     int serr = memcmp(data, buf_ref, sz);
     if (0 != serr)
     {
@@ -57,9 +93,18 @@ test_flash_block(
     const void* buf_ref_pattern)
 {
     OS_Error_t ret;
+    uint64_t timestamp, newTimestamp, delta = 0;
 
     off_t bytes_erased = 0;
+    
+    timestamp = get_time_nsec();
     ret = storage_rpc_erase(addr, BLOCK_SZ, &bytes_erased);
+    newTimestamp = get_time_nsec();
+    delta = newTimestamp - timestamp;
+    Debug_LOG_INFO(
+        "storage_rpc_erase(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
+        delta / NS_IN_S,
+        delta % NS_IN_S);
 
     if ((ret != OS_SUCCESS) || (bytes_erased != BLOCK_SZ))
     {
@@ -67,13 +112,21 @@ test_flash_block(
         return OS_ERROR_ABORTED;
     }
 
+    timestamp = get_time_nsec();
     ret = read_validate(addr, BLOCK_SZ, buf, buf_ref_empty);
+    newTimestamp = get_time_nsec();
+    delta = newTimestamp - timestamp;
+    Debug_LOG_INFO(
+        "read_validate(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
+        delta / NS_IN_S,
+        delta % NS_IN_S);
     if (OS_SUCCESS != ret)
     {
         Debug_LOG_ERROR("erase 0xFF validation, code %d", ret);
         return OS_ERROR_ABORTED;
     }
 
+    timestamp = get_time_nsec();
     for (unsigned int i = 0; i<(BLOCK_SZ/PAGE_SZ); i++)
     {
         memcpy(OS_Dataport_getBuf(port_storage), buf_ref_pattern, PAGE_SZ);
@@ -87,8 +140,21 @@ test_flash_block(
                 write_addr, PAGE_SZ, bytes_written, ret);
         }
     }
+    newTimestamp = get_time_nsec();
+    delta = newTimestamp - timestamp;
+    Debug_LOG_INFO(
+        "storage_rpc_write(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
+        delta / NS_IN_S,
+        delta % NS_IN_S);
 
+    timestamp = get_time_nsec();
     ret = read_validate(addr, BLOCK_SZ, buf, buf_ref_pattern);
+    newTimestamp = get_time_nsec();
+    delta = newTimestamp - timestamp;
+    Debug_LOG_INFO(
+        "read_validate(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
+        delta / NS_IN_S,
+        delta % NS_IN_S);
     if (OS_SUCCESS != ret)
     {
         Debug_LOG_ERROR("pattern validation failed, code %d", ret);
@@ -104,7 +170,7 @@ static bool
 __attribute__((unused))
 test_OS_BlockAccess(void)
 {
-
+    uint64_t timestamp, newTimestamp, delta = 0;
     static uint8_t buf[BLOCK_SZ];
 
     static uint8_t buf_ref_empty[BLOCK_SZ];
@@ -127,9 +193,16 @@ test_OS_BlockAccess(void)
     //test/detect memory size
     Debug_LOG_INFO("Detecting available memory size...");
     //Debug_LOG_INFO("test addr 0x0");
+    //timestamp = get_time_nsec();
     test_flash_block(0, buf, buf_ref_empty, buf_ref_pattern_block_0);
+    /*newTimestamp = get_time_nsec();
+    delta = newTimestamp - timestamp;
+    Debug_LOG_INFO(
+        "test_flash_block(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
+        delta / NS_IN_S,
+        delta % NS_IN_S);*/
+    
     off_t addr = 0;
-
     //note: flash memory always comes in powers of 2
     //note: in our case the flash memories have 8 MiB of storage
     for (unsigned int i = 0; i <= log2(FLASH_SZ/BLOCK_SZ); i++)
@@ -140,11 +213,18 @@ test_OS_BlockAccess(void)
             "Testing memory size: %lld Bytes (%lld MiB).", 
             addr,addr/1024/1024);
 
+        timestamp = get_time_nsec();
         ret = test_flash_block(
                 addr,
                 buf,
                 buf_ref_empty,
                 buf_ref_pattern);
+        newTimestamp = get_time_nsec();
+        delta = newTimestamp - timestamp;
+        Debug_LOG_INFO(
+            "test_flash_block(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
+            delta / NS_IN_S,
+            delta % NS_IN_S);
         if (OS_SUCCESS != ret)
         {
             Debug_LOG_ERROR(
@@ -153,7 +233,14 @@ test_OS_BlockAccess(void)
             break;
         }
 
+        timestamp = get_time_nsec();
         ret = read_validate(0, BLOCK_SZ, buf, buf_ref_pattern_block_0);
+        newTimestamp = get_time_nsec();
+        delta = newTimestamp - timestamp;
+        Debug_LOG_INFO(
+            "read_validate(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
+            delta / NS_IN_S,
+            delta % NS_IN_S);
         if (OS_SUCCESS != ret)
         {
             Debug_LOG_ERROR(
@@ -177,6 +264,7 @@ test_OS_BlockAccess(void)
     const size_t print_delta = 50;
     for(addr = start_addr; addr < end_addr; addr += BLOCK_SZ)
     {
+        timestamp = get_time_nsec();
         //pattern test
         if ((addr/BLOCK_SZ) % print_delta == 0)
         {
@@ -204,6 +292,12 @@ test_OS_BlockAccess(void)
                 addr/BLOCK_SZ,addr,ret);
             return false;
         }
+        newTimestamp = get_time_nsec();
+        delta = newTimestamp - timestamp;
+        Debug_LOG_INFO(
+            "One block test: Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
+            delta / NS_IN_S,
+            delta % NS_IN_S);
     }
     Debug_LOG_INFO(
         "Functioning flash up to block %lld (0x0%jx) => %s\n",
