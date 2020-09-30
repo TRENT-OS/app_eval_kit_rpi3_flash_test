@@ -13,6 +13,11 @@
 #define FLASH_SZ    8*1024*1024
 #define BLOCK_SZ    4096
 #define PAGE_SZ     256
+#define BLOCKS_TO_TEST 128
+
+static uint64_t read_timestamps[2 * BLOCKS_TO_TEST];
+static uint64_t write_timestamps[2 * BLOCKS_TO_TEST];
+static uint64_t erase_timestamps[2 * BLOCKS_TO_TEST];
 
 static OS_Dataport_t port_storage  = OS_DATAPORT_ASSIGN(storage_dp);
 
@@ -36,6 +41,84 @@ get_time_nsec(
     }
 
     return nsec;
+}
+
+static OS_Error_t
+__attribute__((unused))
+read_performance_test(void){
+    uint64_t timestamp, newTimestamp = 0;
+    OS_Error_t ret;
+    
+    for (size_t i = 0; i < BLOCKS_TO_TEST; i++)
+    {
+        off_t bytes_read = 0;
+        timestamp = get_time_nsec();
+        OS_Error_t ret = storage_rpc_read(i * BLOCK_SZ, BLOCK_SZ, &bytes_read);
+        if ((ret != OS_SUCCESS) || (bytes_read != BLOCK_SZ))
+        {
+            Debug_LOG_ERROR("erase failed len_ret=%jx, code %d", bytes_read, ret);
+            return OS_ERROR_ABORTED;
+        }
+        newTimestamp = get_time_nsec();
+        read_timestamps[2*i] = timestamp;
+        read_timestamps[2*i+1] = newTimestamp;
+    }
+    return OS_SUCCESS;
+}
+
+static OS_Error_t
+__attribute__((unused))
+write_performance_test(void){
+    uint64_t timestamp, newTimestamp = 0;
+    OS_Error_t ret;
+    
+    static uint8_t buf_ref_pattern[BLOCK_SZ];
+    memset(buf_ref_pattern, 0xa5, sizeof(buf_ref_pattern));
+
+    for (size_t i = 0; i < BLOCKS_TO_TEST; i++)
+    {
+        timestamp = get_time_nsec();
+        for (unsigned int j = 0; j<(BLOCK_SZ/PAGE_SZ); j++)
+        {
+            memcpy(OS_Dataport_getBuf(port_storage), buf_ref_pattern, PAGE_SZ);
+            off_t write_addr = i * BLOCK_SZ + j*PAGE_SZ;
+            size_t bytes_written = 0;
+            ret = storage_rpc_write(write_addr, PAGE_SZ, &bytes_written);
+            if ((OS_SUCCESS != ret) || (bytes_written != PAGE_SZ))
+            {
+                Debug_LOG_ERROR(
+                    "storage_rpc_write failed, addr=0x%jx, sz=0x%x, read=0x%x, code %d",
+                    write_addr, PAGE_SZ, bytes_written, ret);
+            }
+        }
+        newTimestamp = get_time_nsec();
+        write_timestamps[2*i] = timestamp;
+        write_timestamps[2*i+1] = newTimestamp;
+    }
+    return OS_SUCCESS;
+}
+
+static OS_Error_t
+__attribute__((unused))
+erase_performance_test(void){
+    uint64_t timestamp, newTimestamp = 0;
+    OS_Error_t ret;
+    
+    for (size_t i = 0; i < BLOCKS_TO_TEST; i++)
+    {
+        off_t bytes_erased = 0;
+        timestamp = get_time_nsec();
+        ret = storage_rpc_erase(i * BLOCK_SZ, BLOCK_SZ, &bytes_erased);
+        if ((ret != OS_SUCCESS) || (bytes_erased != BLOCK_SZ))
+        {
+            Debug_LOG_ERROR("erase failed len_ret=%jx, code %d", bytes_erased, ret);
+            return OS_ERROR_ABORTED;
+        }
+        newTimestamp = get_time_nsec();
+        erase_timestamps[2*i] = timestamp;
+        erase_timestamps[2*i+1] = newTimestamp;
+    }
+    return OS_SUCCESS;
 }
 
 //------------------------------------------------------------------------------
@@ -302,12 +385,36 @@ test_OS_BlockAccess(void)
 
 // Public Functions ------------------------------------------------------------
 
+static void print_deltas(uint64_t * arr,int size){
+    return;
+}
+
 int run()
 {
-    Debug_LOG_INFO("Starting NOR Flash test.");
-    Debug_LOG_INFO("Expected flash size: %d Bytes (%d MiB)",FLASH_SZ,FLASH_SZ/1024/1024);
-    bool ret = test_OS_BlockAccess();
-    Debug_LOG_INFO("%s\n",ret ? "FLASH OK!" : "FLASH DEFECT!");
+    OS_Error_t ret = 0;
+    Debug_LOG_INFO("Performance tests.");
+
+    Debug_LOG_INFO("Read performance tests.");
+    ret = read_performance_test();
+    if (ret != OS_SUCCESS)
+    {
+        Debug_LOG_ERROR("Read performance test failed.");
+    }
+    
+    Debug_LOG_INFO("Write performance tests.");
+    ret = write_performance_test();
+    if (ret != OS_SUCCESS)
+    {
+        Debug_LOG_ERROR("Write performance test failed.");
+    }
+    
+    Debug_LOG_INFO("Erase performance tests.");
+    ret = erase_performance_test();
+    if (ret != OS_SUCCESS)
+    {
+        Debug_LOG_ERROR("Erase performance test failed.");
+    }
+
     Debug_LOG_INFO("All tests done!");
     return 0;
 }
