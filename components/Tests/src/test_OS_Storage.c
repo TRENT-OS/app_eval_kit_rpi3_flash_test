@@ -47,16 +47,15 @@ static OS_Error_t
 __attribute__((unused))
 read_performance_test(void){
     uint64_t timestamp, newTimestamp = 0;
-    OS_Error_t ret;
     
     for (size_t i = 0; i < BLOCKS_TO_TEST; i++)
     {
-        off_t bytes_read = 0;
+        size_t bytes_read = 0;
         timestamp = get_time_nsec();
         OS_Error_t ret = storage_rpc_read(i * BLOCK_SZ, BLOCK_SZ, &bytes_read);
         if ((ret != OS_SUCCESS) || (bytes_read != BLOCK_SZ))
         {
-            Debug_LOG_ERROR("erase failed len_ret=%jx, code %d", bytes_read, ret);
+            Debug_LOG_ERROR("storage_rpc_read() failed");
             return OS_ERROR_ABORTED;
         }
         newTimestamp = get_time_nsec();
@@ -86,9 +85,8 @@ write_performance_test(void){
             ret = storage_rpc_write(write_addr, PAGE_SZ, &bytes_written);
             if ((OS_SUCCESS != ret) || (bytes_written != PAGE_SZ))
             {
-                Debug_LOG_ERROR(
-                    "storage_rpc_write failed, addr=0x%jx, sz=0x%x, read=0x%x, code %d",
-                    write_addr, PAGE_SZ, bytes_written, ret);
+                Debug_LOG_ERROR("storage_rpc_write failed");
+                return OS_ERROR_ABORTED;
             }
         }
         newTimestamp = get_time_nsec();
@@ -111,7 +109,7 @@ erase_performance_test(void){
         ret = storage_rpc_erase(i * BLOCK_SZ, BLOCK_SZ, &bytes_erased);
         if ((ret != OS_SUCCESS) || (bytes_erased != BLOCK_SZ))
         {
-            Debug_LOG_ERROR("erase failed len_ret=%jx, code %d", bytes_erased, ret);
+            Debug_LOG_ERROR("storage_rpc_erase() failed");
             return OS_ERROR_ABORTED;
         }
         newTimestamp = get_time_nsec();
@@ -121,300 +119,58 @@ erase_performance_test(void){
     return OS_SUCCESS;
 }
 
-//------------------------------------------------------------------------------
-static OS_Error_t
-__attribute__((unused))
-read_validate(
-    off_t addr,
-    size_t sz,
-    uint8_t *buf,
-    const uint8_t *buf_ref)
-{
-    uint64_t timestamp, newTimestamp, delta = 0;
-    size_t bytes_read = 0;
-    timestamp = get_time_nsec();
-    OS_Error_t ret = storage_rpc_read(addr, sz, &bytes_read);
-    if ((OS_SUCCESS != ret) || (bytes_read != sz))
+static void dump_info(uint64_t * arr,int size){
+    printf("#;call_timestamp;return_timestamp;delta\n");
+    for (size_t i = 0; i < size; i++)
     {
-        Debug_LOG_ERROR(
-            "storage_rpc_read failed, addr=0x%jx, sz=0x%x, read=0x%x, code %d",
-            addr, sz, bytes_read, ret);
-        return OS_ERROR_GENERIC;
+        printf(
+            "%zd;%" PRIu64 ";%" PRIu64 ";%" PRIu64 "\n",
+            (i+1),arr[2 * i],arr[2 * i + 1],(arr[2 * i + 1] - arr[2 * i]));
     }
-    newTimestamp = get_time_nsec();
-    delta = newTimestamp - timestamp;
-    Debug_LOG_INFO(
-        "storage_rpc_read(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
-        delta / NS_IN_S,
-        delta % NS_IN_S);
-
-    const void* data = OS_Dataport_getBuf(port_storage);
-    int serr = memcmp(data, buf_ref, sz);
-    if (0 != serr)
-    {
-        return OS_ERROR_ABORTED;
-    }
-
-    return OS_SUCCESS;
-}
-
-
-//------------------------------------------------------------------------------
-static OS_Error_t
-__attribute__((unused))
-test_flash_block(
-    const off_t addr,
-    void* buf,
-    const void* buf_ref_empty,
-    const void* buf_ref_pattern)
-{
-    uint64_t timestamp, newTimestamp, delta = 0;
-    OS_Error_t ret;
-
-    off_t bytes_erased = 0;
-
-    timestamp = get_time_nsec();
-    ret = storage_rpc_erase(addr, BLOCK_SZ, &bytes_erased);
-    if ((ret != OS_SUCCESS) || (bytes_erased != BLOCK_SZ))
-    {
-        Debug_LOG_ERROR("erase failed len_ret=%jx, code %d", bytes_erased, ret);
-        return OS_ERROR_ABORTED;
-    }
-    newTimestamp = get_time_nsec();
-    delta = newTimestamp - timestamp;
-    Debug_LOG_INFO(
-        "storage_rpc_erase(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
-        delta / NS_IN_S,
-        delta % NS_IN_S);
-
-    timestamp = get_time_nsec();
-    ret = read_validate(addr, BLOCK_SZ, buf, buf_ref_empty);
-    if (OS_SUCCESS != ret)
-    {
-        Debug_LOG_ERROR("erase 0xFF validation, code %d", ret);
-        return OS_ERROR_ABORTED;
-    }
-    newTimestamp = get_time_nsec();
-    delta = newTimestamp - timestamp;
-    Debug_LOG_INFO(
-        "read_validate(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
-        delta / NS_IN_S,
-        delta % NS_IN_S);
-
-    timestamp = get_time_nsec();
-    for (unsigned int i = 0; i<(BLOCK_SZ/PAGE_SZ); i++)
-    {
-        memcpy(OS_Dataport_getBuf(port_storage), buf_ref_pattern, PAGE_SZ);
-        off_t write_addr = addr + i*PAGE_SZ;
-        size_t bytes_written = 0;
-        ret = storage_rpc_write(write_addr, PAGE_SZ, &bytes_written);
-        if ((OS_SUCCESS != ret) || (bytes_written != PAGE_SZ))
-        {
-            Debug_LOG_ERROR(
-                "storage_rpc_write failed, addr=0x%jx, sz=0x%x, read=0x%x, code %d",
-                write_addr, PAGE_SZ, bytes_written, ret);
-        }
-    }
-    newTimestamp = get_time_nsec();
-    delta = newTimestamp - timestamp;
-    Debug_LOG_INFO(
-        "storage_rpc_write(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
-        delta / NS_IN_S,
-        delta % NS_IN_S);
-
-    timestamp = get_time_nsec();
-    ret = read_validate(addr, BLOCK_SZ, buf, buf_ref_pattern);
-    if (OS_SUCCESS != ret)
-    {
-        Debug_LOG_ERROR("pattern validation failed, code %d", ret);
-        return OS_ERROR_ABORTED;
-    }
-    newTimestamp = get_time_nsec();
-    delta = newTimestamp - timestamp;
-    Debug_LOG_INFO(
-        "read_validate(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
-        delta / NS_IN_S,
-        delta % NS_IN_S);
-
-    return OS_SUCCESS;
-}
-
-
-//------------------------------------------------------------------------------
-static bool
-__attribute__((unused))
-test_OS_BlockAccess(void)
-{
-    uint64_t timestamp = 0;
-    uint64_t newTimestamp = 0;
-    uint64_t delta = 0;
-
-    static uint8_t buf[BLOCK_SZ];
-
-    static uint8_t buf_ref_empty[BLOCK_SZ];
-    memset(buf_ref_empty, 0xff, sizeof(buf_ref_empty));
-
-    static uint8_t buf_ref_pattern_block_0[BLOCK_SZ];
-    memset(buf_ref_pattern_block_0, 0x5a, sizeof(buf_ref_pattern_block_0));
-
-    static uint8_t buf_ref_pattern[BLOCK_SZ];
-    memset(buf_ref_pattern, 0xa5, sizeof(buf_ref_pattern));
-
-    OS_Error_t ret;
-    off_t sz;
-    if ((ret = storage_rpc_getSize(&sz)) != OS_SUCCESS)
-    {
-        Debug_LOG_ERROR("storage_rpc_getSize() failed, code %d", ret);
-        return false;
-    }
-
-    //test/detect memory size
-    Debug_LOG_INFO("Detecting available memory size...");
-    timestamp = get_time_nsec();
-    test_flash_block(0, buf, buf_ref_empty, buf_ref_pattern_block_0);
-    newTimestamp = get_time_nsec();
-    delta = newTimestamp - timestamp;
-    Debug_LOG_INFO(
-        "test_flash_block(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
-        delta / NS_IN_S,
-        delta % NS_IN_S);
+    printf("\n");
     
-    off_t addr = 0;
-    //note: flash memory always comes in powers of 2
-    //note: in our case the flash memories have 8 MiB of storage
-    for (unsigned int i = 0; i <= log2(FLASH_SZ/BLOCK_SZ); i++)
-    {
-        addr = BLOCK_SZ << i;
-
-        Debug_LOG_INFO(
-            "Testing memory size: %lld Bytes (%lld MiB).", 
-            addr,addr/1024/1024);
-
-        timestamp = get_time_nsec();
-        ret = test_flash_block(
-                addr,
-                buf,
-                buf_ref_empty,
-                buf_ref_pattern);
-        newTimestamp = get_time_nsec();
-        delta = newTimestamp - timestamp;
-        Debug_LOG_INFO(
-            "test_flash_block(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
-            delta / NS_IN_S,
-            delta % NS_IN_S);
-        if (OS_SUCCESS != ret)
-        {
-            Debug_LOG_ERROR(
-                "test_flash_block 0 failed at addr 0x%jx, code %d",
-                addr, ret);
-            break;
-        }
-
-        timestamp = get_time_nsec();
-        ret = read_validate(0, BLOCK_SZ, buf, buf_ref_pattern_block_0);
-        newTimestamp = get_time_nsec();
-        delta = newTimestamp - timestamp;
-        Debug_LOG_INFO(
-            "read_validate(): Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
-            delta / NS_IN_S,
-            delta % NS_IN_S);
-        if (OS_SUCCESS != ret)
-        {
-            Debug_LOG_ERROR(
-                "read_validate block 0 pattern failed at addr 0x%jx, code %d",
-                addr, ret);
-            break;
-        }
-
-    }
-
-    Debug_LOG_INFO(
-        "Detected memory size: %lld Bytes (%lld MiB) => %s\n",
-        addr,addr/1024/1024,addr==FLASH_SZ ? "FLASH SIZE OK!" : "FLASH SIZE WRONG!");
-
-    if(addr != FLASH_SZ) return false; 
-
-    //test every single memory cell
-    Debug_LOG_INFO("Testing every memory block...");
-    const size_t start_addr = 0x0;
-    const size_t end_addr = FLASH_SZ;
-    const size_t print_delta = 50;
-    for(addr = start_addr; addr < end_addr; addr += BLOCK_SZ)
-    {
-        timestamp = get_time_nsec();
-        //pattern test
-        if ((addr/BLOCK_SZ) % print_delta == 0)
-        {
-            Debug_LOG_INFO(
-                "Testing block %lld of %d", 
-                addr/BLOCK_SZ, FLASH_SZ/BLOCK_SZ);
-        }
-
-        ret = test_flash_block(addr, buf, buf_ref_empty, buf_ref_pattern);
-        if (OS_SUCCESS != ret)
-        {
-            Debug_LOG_ERROR(
-                "test_flash_block %lld failed at addr 0x%jx, code %d",
-                addr/BLOCK_SZ,addr, ret);
-            break;
-        }
-        
-        //block erase 
-        off_t bytes_erased = 0;
-        ret = storage_rpc_erase(addr, BLOCK_SZ, &bytes_erased);
-        if ((ret != OS_SUCCESS) || (bytes_erased != BLOCK_SZ))
-        {
-            Debug_LOG_ERROR(
-                "erase failed for block %lld (0x0%jx), code %d",
-                addr/BLOCK_SZ,addr,ret);
-            return false;
-        }
-        newTimestamp = get_time_nsec();
-        delta = newTimestamp - timestamp;
-        Debug_LOG_INFO(
-            "One block test: Measured Time Delta %" PRIu64 ".%" PRIu64 " sec",
-            delta / NS_IN_S,
-            delta % NS_IN_S);
-    }
-    Debug_LOG_INFO(
-        "Functioning flash up to block %lld (0x0%jx) => %s\n",
-        addr/BLOCK_SZ,addr,addr==FLASH_SZ ? "All blocks working" : "Defect blocks");
-
-    return addr == FLASH_SZ;
-}
-
-// Public Functions ------------------------------------------------------------
-
-static void print_deltas(uint64_t * arr,int size){
-    return;
+    uint64_t delta = 0;
+    int counter = 0;
+    for (counter = 0; counter < size; counter++) delta += (arr[2 * counter + 1] - arr[2 * counter]);
+    delta /= counter;
+    printf("Average delta for call: %lf sec\n",(double)delta / (double)NS_IN_S);
+    printf("Throughput: %lf B/s \n",(double)BLOCK_SZ / ((double)delta / (double)NS_IN_S));
+    
+    for (delta = 0, counter = 1; counter < size; counter++) delta += (arr[2 * counter] - arr[2 * counter - 1]);
+    delta /= counter;
+    printf("Average delta for call: %lf sec\n",(double)delta / (double)NS_IN_S);
+    printf("\n");
 }
 
 int run()
 {
     OS_Error_t ret = 0;
-    Debug_LOG_INFO("Performance tests.");
+    printf("Performance tests.\n\n");
 
-    Debug_LOG_INFO("Read performance tests.");
+    printf("Read performance tests.\n");
     ret = read_performance_test();
     if (ret != OS_SUCCESS)
     {
         Debug_LOG_ERROR("Read performance test failed.");
     }
+    dump_info(read_timestamps,BLOCKS_TO_TEST);
     
-    Debug_LOG_INFO("Write performance tests.");
+    printf("Write performance tests.\n");
     ret = write_performance_test();
     if (ret != OS_SUCCESS)
     {
         Debug_LOG_ERROR("Write performance test failed.");
     }
+    dump_info(write_timestamps,BLOCKS_TO_TEST);
     
-    Debug_LOG_INFO("Erase performance tests.");
+    printf("Erase performance tests.\n");
     ret = erase_performance_test();
     if (ret != OS_SUCCESS)
     {
         Debug_LOG_ERROR("Erase performance test failed.");
     }
+    dump_info(erase_timestamps,BLOCKS_TO_TEST);
 
-    Debug_LOG_INFO("All tests done!");
+    printf("All tests done!\n");
     return 0;
 }
