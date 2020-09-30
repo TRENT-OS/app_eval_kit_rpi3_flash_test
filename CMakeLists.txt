@@ -17,6 +17,10 @@ project(test_filesystem C)
 
 set(LibUtilsDefaultZfLogLevel 5 CACHE STRING "" FORCE)
 
+DeclareCAmkESComponent_TimeServer(
+    TimeServer
+)
+
 DeclareCAmkESComponent(
     test_OS_Storage
     SOURCES
@@ -32,10 +36,6 @@ DeclareCAmkESComponent(
         os_libs
         os_filesystem
         TimeServer_client
-)
-
-DeclareCAmkESComponent_TimeServer(
-    TimeServer
 )
 
 DeclareCAmkESComponent_RPI_SPI_Flash(
