@@ -136,9 +136,9 @@ static void dump_info(uint64_t * arr,int size){
     printf("Average delta for call: %lf sec\n",(double)delta / (double)NS_IN_S);
     printf("Throughput: %lf B/s \n",(double)BLOCK_SZ / ((double)delta / (double)NS_IN_S));
     
-    for (delta = 0, counter = 1; counter < size; counter++) delta += (arr[2 * counter] - arr[2 * counter - 1]);
+    for (delta = 0, counter = 1; counter < size - 1; counter++) delta += (arr[2 * (counter + 1)] - arr[2 * counter]);
     delta /= counter;
-    printf("Average delta for call: %lf sec\n",(double)delta / (double)NS_IN_S);
+    printf("Average delta for two calls: %lf sec\n",(double)delta / (double)NS_IN_S);
     printf("\n");
 }
 
