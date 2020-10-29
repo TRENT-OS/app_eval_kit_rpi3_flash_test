@@ -3,6 +3,7 @@
  *
  *  Copyright (C) 2020, Hensoldt Cyber GmbH
  */
+#include "system_config.h"
 
 import <std_connector.camkes>;
 
@@ -38,7 +39,6 @@ assembly {
     configuration {
         CONFIGURE_INSTANCE_RPI_SPI_FLASH(flash)
 
-        #define FLASH_SZ 8*1024*1024
         CONFIGURE_INSTANCE_StorageServer(
             storageServer,
             0, FLASH_SZ)

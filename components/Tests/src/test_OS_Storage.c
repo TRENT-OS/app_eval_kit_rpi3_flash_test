@@ -9,10 +9,6 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define FLASH_SZ    8*1024*1024
-#define BLOCK_SZ    4096
-#define PAGE_SZ      256
-
 static OS_Dataport_t port_storage  = OS_DATAPORT_ASSIGN(storage_dp);
 
 //------------------------------------------------------------------------------
@@ -24,8 +20,6 @@ read_validate(
     uint8_t *buf,
     const uint8_t *buf_ref)
 {
-    // Debug_LOG_INFO("read_validate addr=0x%x, len=0x%0x", addr, sz);
-
     size_t bytes_read = 0;
     OS_Error_t ret = storage_rpc_read(addr, sz, &bytes_read);
     if ((OS_SUCCESS != ret) || (bytes_read != sz))
@@ -126,7 +120,6 @@ test_OS_BlockAccess(void)
 
     //test/detect memory size
     Debug_LOG_INFO("Detecting available memory size...");
-    //Debug_LOG_INFO("test addr 0x0");
     test_flash_block(0, buf, buf_ref_empty, buf_ref_pattern_block_0);
     off_t addr = 0;
 
