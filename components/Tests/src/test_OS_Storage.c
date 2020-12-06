@@ -9,7 +9,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-static OS_Dataport_t port_storage  = OS_DATAPORT_ASSIGN(storage_dp);
+static OS_Dataport_t port_storage  = OS_DATAPORT_ASSIGN(storage_port);
 
 //------------------------------------------------------------------------------
 static OS_Error_t
@@ -25,7 +25,7 @@ read_validate(
     if ((OS_SUCCESS != ret) || (bytes_read != sz))
     {
         Debug_LOG_ERROR(
-            "storage_rpc_read failed, addr=0x%jx, sz=0x%x, read=0x%x, code %d",
+            "storage_rpc_read failed, addr=0x%jx, sz=0x%zx, read=0x%zx, code %d",
             addr, sz, bytes_read, ret);
         return OS_ERROR_GENERIC;
     }
@@ -77,7 +77,7 @@ test_flash_block(
         if ((OS_SUCCESS != ret) || (bytes_written != PAGE_SZ))
         {
             Debug_LOG_ERROR(
-                "storage_rpc_write failed, addr=0x%jx, sz=0x%x, read=0x%x, code %d",
+                "storage_rpc_write failed, addr=0x%jx, sz=0x%x, read=0x%zx, code %d",
                 write_addr, PAGE_SZ, bytes_written, ret);
         }
     }
@@ -130,7 +130,7 @@ test_OS_BlockAccess(void)
         addr = BLOCK_SZ << i;
 
         Debug_LOG_INFO(
-            "Testing memory size: %lld Bytes (%lld MiB).", 
+            "Testing memory size: %ld Bytes (%ld MiB).", 
             addr,addr/1024/1024);
 
         ret = test_flash_block(
@@ -158,7 +158,7 @@ test_OS_BlockAccess(void)
     }
 
     Debug_LOG_INFO(
-        "Detected memory size: %lld Bytes (%lld MiB) => %s\n",
+        "Detected memory size: %ld Bytes (%ld MiB) => %s\n",
         addr,addr/1024/1024,addr==FLASH_SZ ? "FLASH SIZE OK!" : "FLASH SIZE WRONG!");
 
     if(addr != FLASH_SZ) return false; 
@@ -174,7 +174,7 @@ test_OS_BlockAccess(void)
         if ((addr/BLOCK_SZ) % print_delta == 0)
         {
             Debug_LOG_INFO(
-                "Testing block %lld of %d", 
+                "Testing block %ld of %d", 
                 addr/BLOCK_SZ, FLASH_SZ/BLOCK_SZ);
         }
 
@@ -182,7 +182,7 @@ test_OS_BlockAccess(void)
         if (OS_SUCCESS != ret)
         {
             Debug_LOG_ERROR(
-                "test_flash_block %lld failed at addr 0x%jx, code %d",
+                "test_flash_block %ld failed at addr 0x%jx, code %d",
                 addr/BLOCK_SZ,addr, ret);
             break;
         }
@@ -193,13 +193,13 @@ test_OS_BlockAccess(void)
         if ((ret != OS_SUCCESS) || (bytes_erased != BLOCK_SZ))
         {
             Debug_LOG_ERROR(
-                "erase failed for block %lld (0x0%jx), code %d",
+                "erase failed for block %ld (0x0%jx), code %d",
                 addr/BLOCK_SZ,addr,ret);
             return false;
         }
     }
     Debug_LOG_INFO(
-        "Functioning flash up to block %lld (0x0%jx) => %s\n",
+        "Functioning flash up to block %ld (0x0%jx) => %s\n",
         addr/BLOCK_SZ,addr,addr==FLASH_SZ ? "All blocks working" : "Defect blocks");
 
     return addr == FLASH_SZ;
@@ -210,6 +210,9 @@ test_OS_BlockAccess(void)
 int run()
 {
     Debug_LOG_INFO("Starting NOR Flash test.");
+    // off_t size = 0;
+    // storage_rpc_getSize(&size);
+    // Debug_LOG_INFO("Detected flash size: %ld",size);
     Debug_LOG_INFO("Expected flash size: %d Bytes (%d MiB)",FLASH_SZ,FLASH_SZ/1024/1024);
     bool ret = test_OS_BlockAccess();
     Debug_LOG_INFO("%s\n",ret ? "FLASH OK!" : "FLASH DEFECT!");
