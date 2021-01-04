@@ -9,7 +9,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-static OS_Dataport_t port_storage  = OS_DATAPORT_ASSIGN(storage_dp);
+static OS_Dataport_t port_storage  = OS_DATAPORT_ASSIGN(storage_port);
 
 //------------------------------------------------------------------------------
 static OS_Error_t

@@ -33,17 +33,17 @@ DeclareCAmkESComponent(
         os_filesystem
 )
 
-DeclareCAmkESComponent_TimeServer(
+TimeServer_DeclareCAmkESComponent(
     TimeServer
 )
 
-DeclareCAmkESComponent_RPI_SPI_Flash(
-    RPI_SPI_Flash
+RPi_SPI_Flash_DeclareCAmkESComponent(
+    RPi_SPI_Flash
     LIBS
         TimeServer_client
 )
 
-DeclareCAmkESComponent_StorageServer(
+StorageServer_DeclareCAmkESComponent(
     StorageServer
 )
 

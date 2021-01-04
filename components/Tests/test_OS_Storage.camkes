@@ -7,5 +7,5 @@ import <if_OS_Storage.camkes>;
 component test_OS_Storage {
     control;
     uses        if_OS_Storage   storage_rpc;
-    dataport    Buf             storage_dp;
+    dataport    Buf             storage_port;
 }
